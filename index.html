@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="theme-color" content="#f4f0fa">
+    <title>Simple File Encryptor 3.0</title>
+
+    <meta name="description"
+        content="Simple local file encryption in your browser. Your files stay on your device.">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; worker-src 'self' blob:;">
+    <script src="js/theme.js"></script>
+
+    <link rel="icon" href="public/favicon.svg">
+    <link rel="manifest" href="public/manifest.json">
+
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/dark-mode.css">
+</head>
+
+<body class="home-page">
+
+<div class="intro-layer" id="introOverlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+    <div class="intro-card">
+        <div class="intro-mark" aria-hidden="true"><img src="public/logo.svg" alt=""></div>
+        <p class="intro-kicker">Simple File Encryptor 3.0</p>
+        <h2 id="introTitle">Your files stay yours.</h2>
+        <p class="intro-copy">SFE encrypts and decrypts your files locally in your browser. Nothing is uploaded, and your password stays with you while the app does the work.</p>
+        <button class="intro-button" id="introGotIt" type="button">Got It</button>
+    </div>
+</div>
+
+<header class="navbar">
+    <a class="logo-area" href="index.html" aria-label="Simple File Encryptor home">
+        <img src="public/logo.svg" alt="">
+        <span>Simple File Encryptor</span>
+    </a>
+
+    <div class="nav-actions">
+        <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Dark mode: off" title="Switch to dark mode">
+            <span class="theme-toggle__label">Dark mode</span>
+            <span class="theme-toggle__switch" aria-hidden="true"><span class="theme-toggle__thumb"></span></span>
+        </button>
+        <nav aria-label="Primary navigation">
+            <a href="about.html" class="nav-pill">About</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<section class="hero">
+
+<h1>Protect your files.</h1>
+
+<p>
+Protect or restore your files without sending them anywhere. Everything happens right here on your device.
+</p>
+<div class="local-proof" role="note"><span class="local-proof__dot" aria-hidden="true"></span><strong>Files stay on your device.</strong><span>No uploads.</span></div>
+<div class="security-pills" aria-label="Security summary"><span>Stays on device</span><span>Strong password protection</span><span>No uploads</span></div>
+
+</section>
+
+<section class="mode-selector">
+
+<button id="encryptTab" class="mode active">
+Encrypt
+</button>
+
+<button id="decryptTab" class="mode">
+Decrypt
+</button>
+
+</section>
+
+<section class="card workflow-card">
+
+<div class="section-heading"><div><span class="step-label">01</span><h2>Choose your files</h2></div><span class="section-hint">Up to 1 GB per file</span></div>
+
+<div id="dropZone">
+
+<div class="upload-icon">
+
+📁
+
+</div>
+
+<h2>Drop files or a folder here</h2>
+
+<p>or click below to choose files or a folder</p>
+
+<input
+type="file"
+id="fileInput"
+hidden
+multiple>
+
+<button id="chooseFile">
+
+Select Files
+
+</button>
+
+<div class="picker-mode" aria-label="Selection mode">
+
+<button id="pickerFiles" type="button" class="picker-option active">
+Files
+</button>
+
+<button id="pickerFolder" type="button" class="picker-option">
+Folder
+</button>
+
+</div>
+
+<p id="selectedFile">
+
+No files selected
+
+</p>
+
+<div class="security-options" aria-labelledby="kdfLabel">
+
+<label id="kdfLabel" for="kdfTrigger">Password protection</label>
+
+<div class="kdf-picker" id="kdfPicker">
+    <button id="kdfTrigger" class="kdf-picker__trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="kdfMenu">
+        <span class="kdf-picker__value">Argon2id</span>
+        <span class="kdf-picker__chevron" aria-hidden="true">⌄</span>
+    </button>
+    <div id="kdfMenu" class="kdf-picker__menu" role="listbox" tabindex="-1" aria-label="Password protection choices" hidden>
+        <button type="button" class="kdf-picker__option is-selected" role="option" aria-selected="true" data-kdf="argon2id">
+            <span>Argon2id</span><small>Recommended</small>
+        </button>
+        <button type="button" class="kdf-picker__option" role="option" aria-selected="false" data-kdf="pbkdf2">
+            <span>PBKDF2</span><small>Alternate</small>
+        </button>
+    </div>
+</div>
+
+<select id="kdf" class="native-kdf" tabindex="-1" aria-hidden="true">
+    <option value="argon2id" selected>Argon2id</option>
+    <option value="pbkdf2">PBKDF2</option>
+</select>
+
+<p id="kdfHelp" class="security-help">Pick how much work goes into protecting your password. Argon2id is the recommended choice.</p>
+
+<div id="argonControls" class="kdf-control-group">
+    <div class="security-control-heading">
+        <label id="argonMemoryLabel" for="argonMemoryInput">Argon2id memory</label>
+        <span id="argonMemoryValue" class="security-value">64 MiB</span>
+    </div>
+
+    <input id="argonMemoryRange" class="security-range" type="range" min="12" max="256" step="1" value="64" aria-label="Argon2id memory in MiB">
+
+    <div class="security-number-row">
+        <input id="argonMemoryInput" class="security-number" type="number" min="12" max="256" step="1" value="64" inputmode="numeric" aria-describedby="argonMemoryHelp">
+        <span>MiB</span>
+    </div>
+
+    <p id="argonMemoryHelp" class="security-help">Custom memory from 12–256 MiB. Higher values can make guessing harder, but use more memory and may feel slower on some phones.</p>
+    <p class="security-meta">Profile: 3 passes · 4 lanes</p>
+</div>
+
+<div id="pbkdf2Controls" class="kdf-control-group" hidden>
+    <div class="security-control-heading">
+        <label id="pbkdf2IterationsLabel" for="pbkdf2IterationsInput">PBKDF2 iterations</label>
+        <span id="pbkdf2IterationsValue" class="security-value">600,000</span>
+    </div>
+
+    <input id="pbkdf2IterationsRange" class="security-range" type="range" min="600000" max="2000000" step="1000" value="600000" aria-label="PBKDF2 iterations">
+
+    <div class="security-number-row">
+        <input id="pbkdf2IterationsInput" class="security-number" type="number" min="600000" max="2000000" step="1" value="600000" inputmode="numeric" aria-describedby="pbkdf2IterationsHelp">
+        <span>iterations</span>
+    </div>
+
+    <p id="pbkdf2IterationsHelp" class="security-help">Higher values can make guessing harder, but take longer to process.</p>
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+<section class="card workflow-card">
+
+<div class="section-heading"><div><span class="step-label">02</span><h2>Set a password</h2></div><span class="section-hint">Never stored</span></div>
+
+<div class="password-generator">
+<button type="button" id="generatePassword">Generate secure password</button>
+</div>
+
+<label>
+
+Password
+
+</label>
+
+<input
+type="password"
+id="password"
+placeholder="Enter password">
+
+<label>
+
+Confirm Password
+
+</label>
+
+<input
+type="password"
+id="confirmPassword"
+placeholder="Repeat password">
+
+<div class="password-tools">
+
+<label>
+
+<input
+type="checkbox"
+id="showPassword">
+
+Show Password
+
+</label>
+
+<div class="strength-tracker" aria-live="polite">
+
+<div class="strength-header">
+    <div id="strength">Strength: —</div>
+    <span id="strengthScore" class="security-value">0/100</span>
+</div>
+
+<div class="strength-meter" aria-hidden="true">
+    <div id="strengthMeterBar"></div>
+</div>
+
+<p id="strengthAdvice" class="strength-advice">Use a long, unique password. This tracker estimates predictability; it does not measure exact entropy.</p>
+
+</div>
+
+</div>
+
+</section>
+
+<section class="card workflow-card action-card">
+
+<div class="section-heading"><div><span class="step-label">03</span><h2>Process</h2></div><span class="section-hint">Runs on this device</span></div>
+
+<button id="actionButton">
+
+Encrypt Files
+
+</button>
+
+<div class="progress-container">
+
+<div id="progressBar">
+
+</div>
+
+</div>
+
+<p id="status">
+
+Waiting...
+
+</p>
+
+</section>
+
+<section class="card output workflow-card step-four">
+
+<div class="section-heading">
+    <div>
+        <span class="step-label">04</span>
+        <h2>Output</h2>
+    </div>
+    <span class="section-hint">Ready when complete</span>
+</div>
+
+<p id="outputFilename">
+No file generated.
+</p>
+
+<button
+id="downloadButton"
+disabled>
+
+Download
+
+</button>
+
+</section>
+
+</main>
+
+
+<footer>
+
+<p>
+
+Simple File Encryptor 3.0
+
+</p>
+
+<p>
+
+Local file protection with modern encryption
+
+</p>
+
+</footer>
+
+<script src="js/utils.js"></script>
+<script src="js/file.js"></script>
+<script src="js/password.js"></script>
+<script src="js/dragdrop.js"></script>
+<script src="js/argon2id-legacy.js"></script>
+<script src="js/argon2id.js"></script>
+<script src="js/zip.js"></script>
+<script src="js/crypto.js"></script>
+<script src="js/download.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,255 @@
+/*
+   SIMPLE FILE ENCRYPTOR 3.0 — CONTROLLED MOTION
+*/
+
+@keyframes pageEnter{
+    from{opacity:0;transform:translateY(10px)}
+    to{opacity:1;transform:translateY(0)}
+}
+
+@keyframes cardEnter{
+    from{opacity:0;transform:translateY(12px)}
+    to{opacity:1;transform:translateY(0)}
+}
+
+@keyframes cloudDrift{
+    from{transform:translate3d(0,0,0) scale(1)}
+    to{transform:translate3d(18px,-12px,0) scale(1.04)}
+}
+
+@keyframes buttonSheen{
+    0%,22%,100%{transform:translateX(-10%) rotate(18deg);opacity:0}
+    30%{transform:translateX(145%) rotate(18deg);opacity:.72}
+    38%{transform:translateX(260%) rotate(18deg);opacity:0}
+}
+
+@keyframes arrowPulse{
+    0%,100%{transform:translateX(-50%) translateY(0);opacity:.72;box-shadow:inset 0 1px 0 rgba(255,255,255,.94),0 10px 24px rgba(90,64,125,.07),0 0 18px rgba(194,134,255,.06)}
+    50%{transform:translateX(-50%) translateY(3px);opacity:1;box-shadow:inset 0 1px 0 rgba(255,255,255,.96),0 12px 26px rgba(90,64,125,.09),0 0 24px rgba(194,134,255,.10)}
+}
+
+.hero,
+.card,
+footer,
+.docs-hero,
+.doc-section{
+    animation:pageEnter .58s var(--ease) both;
+}
+
+.card:nth-of-type(2){animation-delay:45ms}
+.card:nth-of-type(3){animation-delay:90ms}
+.card:nth-of-type(4){animation-delay:135ms}
+
+.upload-icon{
+    animation:softFloat 4.2s ease-in-out infinite;
+}
+
+.workflow-card:not(.step-four)::after{
+    animation:arrowPulse 2.6s ease-in-out infinite;
+}
+
+nav a,
+.back-button,
+.logo-area,
+.about-brand,
+.feature-item{
+    transition:
+        transform var(--normal) var(--ease),
+        opacity var(--normal) ease,
+        box-shadow var(--normal) var(--ease),
+        border-color var(--normal) var(--ease),
+        background var(--normal) var(--ease);
+}
+
+.nav-pill:hover,
+.back-button:hover,
+.feature-item:hover{
+    transform:translateY(-1px);
+}
+
+.feature-item:hover{
+    box-shadow:0 10px 26px rgba(78,58,109,.08);
+    border-color:rgba(134,103,247,.22);
+}
+
+#dropZone{
+    transition:
+        transform var(--normal) var(--ease),
+        border-color var(--normal) var(--ease),
+        background var(--normal) var(--ease),
+        box-shadow var(--normal) var(--ease);
+}
+
+#dropZone:hover{
+    transform:translateY(-1px);
+}
+
+#dropZone.dragover{
+    transform:scale(1.008);
+    box-shadow:0 16px 36px rgba(104,78,150,.08),0 0 30px rgba(185,119,240,.08);
+}
+
+input,
+select{
+    transition:
+        border-color var(--normal) var(--ease),
+        background var(--normal) var(--ease),
+        box-shadow var(--normal) var(--ease);
+}
+
+.mode{
+    transition:
+        transform var(--fast) var(--ease),
+        background var(--normal) var(--ease),
+        box-shadow var(--normal) var(--ease),
+        color var(--normal) ease;
+}
+
+#progressBar{
+    animation:progressShine 2.6s linear infinite;
+}
+
+@keyframes progressShine{
+    from{background-position:0 0}
+    to{background-position:180% 0}
+}
+
+@keyframes softFloat{
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-4px)}
+}
+
+/* ==========================================================
+   SFE 3.0 — MICRO-INTERACTIONS
+   Small feedback motions: reveal, sheen, breathing, progress.
+========================================================== */
+
+@keyframes introCardIn{
+    from{opacity:0;transform:translateY(10px) scale(.982)}
+    to{opacity:1;transform:translateY(0) scale(1)}
+}
+
+@keyframes tipCycle{
+    0%{opacity:0;clip-path:inset(0 100% 0 0);transform:translateX(-7px)}
+    8%{opacity:1;clip-path:inset(0 0 0 0);transform:translateX(0)}
+    20%,25%{opacity:1;clip-path:inset(0 0 0 0);transform:translateX(0)}
+    33%{opacity:0;clip-path:inset(0 0 0 100%);transform:translateX(7px)}
+    100%{opacity:0;clip-path:inset(0 0 0 100%);transform:translateX(7px)}
+}
+
+@keyframes actionBreath{
+    0%,100%{box-shadow:inset 0 1px 0 rgba(255,255,255,.99),0 10px 26px rgba(108,77,164,.095),0 0 18px rgba(231,123,198,.045)}
+    50%{box-shadow:inset 0 1px 0 rgba(255,255,255,.99),0 12px 28px rgba(108,77,164,.11),0 0 22px rgba(231,123,198,.07)}
+}
+
+@keyframes arrowPulseFinal{
+    0%,100%{transform:translateX(-50%) translateY(0);opacity:.72;box-shadow:inset 0 1px 0 rgba(255,255,255,.99),0 8px 18px rgba(78,59,109,.07),0 0 14px rgba(167,116,224,.06)}
+    50%{transform:translateX(-50%) translateY(2px);opacity:.95;box-shadow:inset 0 1px 0 rgba(255,255,255,.99),0 10px 20px rgba(78,59,109,.08),0 0 20px rgba(167,116,224,.10)}
+}
+
+@keyframes logoBreath{
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-1px)}
+}
+
+@keyframes fieldFocusEcho{
+    0%{box-shadow:0 0 0 0 rgba(141,115,239,0)}
+    45%{box-shadow:0 0 0 4px rgba(141,115,239,.075)}
+    100%{box-shadow:0 0 0 0 rgba(141,115,239,0)}
+}
+
+.logo-area img,
+.about-brand img{
+    animation:logoBreath 5.2s ease-in-out infinite;
+}
+
+.workflow-card:not(.step-four)::after{
+    animation:arrowPulseFinal 2.8s var(--ease-smooth) infinite;
+}
+
+input[type=password]:focus,
+input[type=text]:focus,
+.security-number:focus{
+    animation:fieldFocusEcho 320ms var(--ease-smooth);
+}
+
+@media(prefers-reduced-motion:reduce){
+    .logo-area img,
+    .about-brand img,
+    #actionButton:not(:disabled),
+    .workflow-card:not(.step-four)::after{
+        animation:none!important;
+    }
+
+    .tip-rail__viewport span{
+        animation:none!important;
+        opacity:0;
+    }
+
+    .tip-rail__viewport span:first-child{
+        position:static;
+        opacity:1;
+        clip-path:none;
+        transform:none;
+    }
+
+    .intro-layer.is-visible .intro-card{
+        animation:none!important;
+    }
+}
+
+/* ---------- Lightweight motion pass ---------- */
+
+@keyframes arrowDriftLight{
+    0%,100%{transform:translateX(-50%) translateY(0);opacity:.72}
+    50%{transform:translateX(-50%) translateY(2px);opacity:.94}
+}
+
+@keyframes progressShineLight{
+    from{background-position:0 0}
+    to{background-position:140% 0}
+}
+
+#actionButton:not(:disabled){
+    /* Static glow is cheaper than continuously animating box-shadow. */
+    animation:none;
+}
+
+#progressBar{
+    animation:progressShineLight 3.2s linear infinite;
+}
+
+.workflow-card:not(.step-four)::after{
+    width:30px;
+    height:30px;
+    bottom:-18px;
+    border-radius:11px;
+    font-size:.96rem;
+    animation:arrowDriftLight 2.9s ease-in-out infinite;
+}
+
+@media(max-width:560px){
+    body::before,
+    body::after{
+        animation-duration:28s;
+        filter:blur(26px);
+        opacity:.45;
+    }
+
+    .card{
+        -webkit-backdrop-filter:blur(14px) saturate(110%);
+        backdrop-filter:blur(14px) saturate(110%);
+    }
+
+    .workflow-card:not(.step-four)::after{
+        bottom:-17px;
+    }
+}
+
+@media(prefers-reduced-motion:reduce){
+    #progressBar,
+    .kdf-picker.is-open .kdf-picker__menu,
+    .workflow-card:not(.step-four)::after{
+        animation:none!important;
+    }
+}

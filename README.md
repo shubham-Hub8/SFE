@@ -1,229 +1,95 @@
-Simple File Encryptor
+# Simple File Encryptor — Version 3.0
 
-Local file encryption built around privacy, security, and keeping your files on your own device.
+Simple File Encryptor (SFE) is a self-contained browser application for local file encryption and decryption. Version 3.0 keeps the existing visual structure while replacing the new-file container design with a privacy-oriented SFE3 format.
 
-"Open SFE" (https://sfesecure.netlify.app)
+## What SFE 3.0 does
 
-SFE (Simple File Encryptor) is an open-source file encryption tool that runs directly in your browser. It is designed for people who want to encrypt files without uploading them to a server, creating an account, or handing their files over to an online service.
+- New encryption uses the SFE3 container format.
+- AES-256-GCM is used for authenticated encryption through the browser Web Crypto API.
+- Argon2id is the recommended password KDF.
+- PBKDF2-HMAC-SHA-256 is available as an alternate SFE3 KDF at 600,000 iterations by default.
+- Every SFE3 container gets a fresh 32-byte random salt and a fresh 12-byte random nonce base.
+- Argon2id defaults to 64 MiB, 3 passes and 4 lanes, with a custom 12–256 MiB memory control exposed by the application.
+- SFE3 processes data in fixed 1 MiB records rather than wrapping independently encrypted files in a plaintext ZIP.
+- The manifest is encrypted. New SFE3 containers do not expose original filenames, relative paths, file counts, exact individual sizes, MIME types, or filesystem timestamps in the clear.
+- New encrypted downloads use a cryptographically random outer filename and the `.sfe3` extension instead of reusing the original filename.
+- Final data records are zero-padded to a fixed 1 MiB payload size, reducing exact-size leakage at the record level.
+- A secure 32-character password generator uses `crypto.getRandomValues()` with rejection sampling so character selection is unbiased.
+- The password strength tracker is a predictability-aware local heuristic that considers length, character diversity, repeated chunks, repeated characters, sequential runs, keyboard patterns, and common weak passwords; it does not claim to measure exact entropy.
+- Passwords for new SFE3 encryption are normalized using Unicode NFC, require 12–128 Unicode code points, and obvious weak patterns are rejected.
+- Individual files are limited to 1 GiB and total plaintext input is limited to just under 4 GiB.
+- Existing SFE1 and SFE2 files remain decryptable for migration.
 
-Everything happens locally in your browser.
+## SFE3 container overview
 
-What SFE does
+The public header is fixed at 64 bytes:
 
-SFE encrypts files using AES-256-GCM, with Argon2id used for password-based key derivation.
+`magic | version | KDF | cipher | flags | KDF parameters | 32-byte salt | 12-byte nonce base`
 
-The basic flow is:
+After the header:
 
-1. Select a file or folder.
-2. Choose your Argon2id settings.
-3. Enter a password.
-4. SFE derives an encryption key from the password.
-5. The file is encrypted locally.
-6. The encrypted file is saved back to your device.
+`encrypted fixed-size manifest record | encrypted fixed-size data records`
 
-Decryption works the same way in reverse. The correct password is required to recover the original file.
+The manifest record has a fixed 1 MiB plaintext payload. Each data record has a fixed 1 MiB plaintext payload plus a 4-byte actual-length field. AES-GCM adds a 128-bit authentication tag to every record.
 
-Your files are not uploaded to SFE's servers because SFE does not need a server to perform the encryption.
+Each record also authenticates the full SFE3 header, its record type and its record index as AES-GCM additional authenticated data (AAD). This binds the record to the exact container parameters and position.
 
-Why I made it
+## KDFs
 
-A lot of file encryption tools make simple encryption feel more complicated than it needs to be. Others require an account or send files to a remote service.
+### Argon2id (recommended)
 
-I wanted something that was straightforward:
+SFE3 uses the RFC 9106 Argon2id algorithm with a 32-byte derived key. The default profile is:
 
-Pick a file → enter a password → encrypt it → keep the encrypted file.
+- Memory: 64 MiB
+- Passes: 3
+- Lanes: 4
+- Salt: 32 random bytes
 
-SFE is also meant to be understandable. The encryption settings are exposed instead of hiding everything behind a single "Secure" button.
+The application exposes a custom whole-MiB memory value from 12 through 256 MiB. The implementation is fully local and does not load an external cryptography library or CDN asset.
 
-Security
+### PBKDF2-HMAC-SHA-256
 
-SFE uses modern cryptographic primitives rather than trying to create its own encryption algorithm.
+SFE3 supports PBKDF2-HMAC-SHA-256 with a visible custom iteration control from 600,000 through 2,000,000 iterations, defaulting to 600,000. The exact selected count is stored in the SFE3 header so decryption uses the same work factor.
 
-AES-256-GCM
+It derives the same 256-bit AES key length used by the Argon2id path. Argon2id is the preferred choice for new files because it is memory-hard; PBKDF2 is available when a conventional, widely supported KDF is specifically desired.
 
-AES-256-GCM is used for the actual file encryption.
+### Argon2id memory control
 
-It provides both confidentiality and authentication, which means the encrypted data cannot simply be modified without the change being detected during decryption.
+SFE3 exposes a custom Argon2id memory setting from 12 MiB through 256 MiB. The default is 64 MiB, with 3 passes and 4 lanes. Higher memory settings increase the resources required for password guessing and increase RAM usage on the local device.
 
-Argon2id
+## Metadata protection
 
-Passwords are not used directly as AES keys.
+New SFE3 encryption does not put the original filename in the outer encrypted filename. It uses 32 random hexadecimal characters followed by `.sfe3`.
 
-SFE uses Argon2id to derive a cryptographic key from the password. Argon2id is designed to make password guessing more expensive by requiring both computation and memory.
+For multi-file encryption, SFE3 does not create a plaintext ZIP containing encrypted entries. Instead, the filenames and relative paths are stored in an authenticated encrypted manifest. The manifest also stores the data sizes required for reconstruction after decryption.
 
-SFE lets you adjust the Argon2id resource settings, including the memory cost and iteration settings.
+MIME types and source filesystem timestamps are not stored in the SFE3 manifest.
 
-Higher settings require more resources and can take longer to process. The right setting depends on the device being used.
+SFE3 deliberately does not claim that every observable side channel disappears. The encrypted container's total byte length remains observable and therefore reveals the total plaintext size rounded up to the 1 MiB record boundary. This is a normal limitation of a practical fixed-size container. The format substantially reduces unnecessary filename, path and per-file metadata leakage without requiring unbounded padding.
 
-Salts
+## Authentication and tamper detection
 
-A unique salt is generated for password-based key derivation.
+AES-256-GCM authenticates:
 
-This prevents the same password from producing the same derived key across different encryption operations.
+- the public SFE3 header,
+- the record type,
+- the record index,
+- and the encrypted record contents.
 
-IVs / nonces
+SFE3 also derives each record nonce by adding the record index to a fresh random 96-bit nonce base. The expected nonce is checked before decryption. Reordering, replacing, truncating or modifying records therefore causes authentication or structural validation to fail.
 
-AES-GCM requires a unique nonce for encryption. SFE generates a new value for each encryption operation instead of reusing one.
+## Compatibility
 
-Reusing a GCM nonce with the same key can seriously compromise security, so this is an important part of the encryption process.
+SFE3 is the format used for new encryption.
 
-Privacy
+SFE1 and SFE2 remain read-only compatibility formats so existing encrypted files can be migrated by decrypting them and encrypting them again as SFE3. Legacy formats retain their original cryptographic constructions for compatibility; they are not silently rewritten in place.
 
-SFE is designed around local processing.
+## Running the application
 
-There is:
+Extract the release ZIP and open `index.html` in a modern browser. The release is designed to remain portable and offline-capable after loading. There is no Node.js requirement, no account, no server component, no upload step and no CDN dependency.
 
-- No account system
-- No file upload service
-- No server-side encryption
-- No cloud storage requirement
-- No need to send your password anywhere
+## Security scope
 
-The browser performs the cryptographic work on your device.
+This project is an open-source client-side encryption utility. It has not undergone an independent cryptographic security audit. The security documentation in `SFE3-SECURITY-IMPLEMENTATION-AND-AUDIT.txt` explains the file format, threat model, implementation details and verification performed for this release.
 
-That does not magically make a device secure. If your phone or computer is compromised, malware or someone with access to the device may still be able to access files or passwords while you are using SFE.
-
-Features
-
-- AES-256-GCM file encryption
-- Argon2id password-based key derivation
-- Adjustable Argon2id memory cost
-- Adjustable iteration settings
-- Random salts
-- Random encryption nonces
-- Local browser-based processing
-- File encryption without uploading files
-- File decryption
-- Support for large files
-- Works without an account
-- Open-source
-- Designed to work directly in a modern browser
-
-How the password is handled
-
-Your password is used locally to derive the encryption key.
-
-SFE does not need to send the password to a server because there is no server involved in the encryption process.
-
-This is also why losing your password is a serious problem.
-
-There is no SFE account recovery system that can give you the original password back.
-
-If you lose the password used to encrypt a file, the encrypted file may be unrecoverable.
-
-Keep important passwords somewhere safe.
-
-How the encrypted file works
-
-The encrypted file contains the information needed for SFE to know how to process it during decryption, including the parameters needed for key derivation and encryption.
-
-The password itself is not stored inside the encrypted file.
-
-When you try to decrypt it, SFE derives the key again using the stored parameters and the password you provide.
-
-If the password is wrong or the encrypted data has been modified, authentication fails and the file cannot be successfully decrypted.
-
-Resource settings
-
-Argon2id can use a significant amount of memory depending on the settings you choose.
-
-This is intentional.
-
-Password-based encryption needs to make brute-force attacks expensive, and memory usage is one of the things Argon2id uses to achieve that.
-
-There is a tradeoff:
-
-Higher settings = more resistance to password guessing, but more work for your device.
-
-On a phone or lower-end device, extremely high memory settings may take noticeably longer or may fail if the browser cannot allocate enough memory.
-
-Use a setting that your device can handle reliably.
-
-Browser-based does not mean "uploaded"
-
-SFE is a web application, but the encryption itself happens locally.
-
-Opening SFE in your browser does not mean your selected files are automatically sent to a server for encryption.
-
-The web app provides the interface and the code. Your files stay on your device while the encryption operation is performed.
-
-Open source
-
-SFE is open source.
-
-You can inspect the source code, see how the encryption process is implemented, report problems, suggest improvements, or build your own version.
-
-That matters for a security tool because you should not have to blindly trust a black box.
-
-GitHub:
-
-"View the source code" (https://github.com/shubham-Hub8/File-encrypter-)
-
-Things to keep in mind
-
-SFE protects the files you encrypt. It does not protect your entire device.
-
-A strong encryption system can still be undermined by:
-
-- A weak password
-- Malware on the device
-- Someone accessing your unlocked device
-- Losing the password
-- Accidentally deleting the only copy of an important file
-- Using an outdated or compromised browser
-
-Encryption is only one part of keeping data secure.
-
-For important files, keep a backup of the encrypted file somewhere safe.
-
-Who is SFE for?
-
-SFE is useful if you want to:
-
-- Keep personal files encrypted on your device
-- Store sensitive documents more safely
-- Encrypt files before putting them on cloud storage
-- Send someone an encrypted file separately from its password
-- Experiment with modern browser-based cryptography
-- Learn how password-based file encryption works
-
-You don't need an account or a complicated setup to get started.
-
-Getting started
-
-Go to:
-
-https://sfesecure.netlify.app
-
-Choose your file, select your encryption settings, enter a strong password, and encrypt it.
-
-Keep the encrypted file and your password safe.
-
-That's it.
-
-Technology
-
-SFE is built as a client-side web application using standard web technologies and WebAssembly-based cryptographic functionality.
-
-The main cryptographic components are:
-
-- AES-256-GCM for authenticated encryption
-- Argon2id for password-based key derivation
-- Random salts for password derivation
-- Random nonces/IVs for encryption
-
-No custom encryption algorithm is being used.
-
-Project status
-
-SFE 3.0 is the current version of the project.
-
-The project is still open to improvements, bug fixes, security reviews, and ideas. If you find something that looks wrong, please open an issue or contribute a fix.
-
-License
-
-See the repository for the project's license and source code.
-
----
-
-Made as a small, practical encryption tool for people who want control over their own files.
+A forgotten password cannot be recovered by the application. Choose a strong password and keep an independent backup of important encrypted files.

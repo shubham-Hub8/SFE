@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <linearGradient id="aurora" x1="48" y1="36" x2="214" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A98BFF"/>
+      <stop offset="0.5" stop-color="#EA82C6"/>
+      <stop offset="1" stop-color="#71CFE7"/>
+    </linearGradient>
+    <linearGradient id="body" x1="74" y1="104" x2="184" y2="204" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9F80F4"/>
+      <stop offset="0.48" stop-color="#E67FC5"/>
+      <stop offset="1" stop-color="#6BC6DE"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="70" y1="42" x2="188" y2="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.34"/>
+    </linearGradient>
+    <filter id="softGlow" x="-45%" y="-45%" width="190%" height="190%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feFlood flood-color="#B47DEB" flood-opacity="0.22" result="tint"/>
+      <feComposite in="tint" in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="shadow" x="-35%" y="-35%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#7459A4" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <rect x="18" y="18" width="220" height="220" rx="62" fill="#FFFFFF" fill-opacity="0.18" stroke="#FFFFFF" stroke-opacity="0.84" stroke-width="2"/>
+  <rect x="29" y="29" width="198" height="198" rx="53" fill="url(#aurora)" fill-opacity="0.11"/>
+
+  <path d="M72 111V89C72 57.52 97.52 32 129 32C160.48 32 186 57.52 186 89V111H165V89C165 69.12 148.88 53 129 53C109.12 53 93 69.12 93 89V111H72Z" fill="url(#aurora)" filter="url(#softGlow)"/>
+  <rect x="52" y="103" width="154" height="112" rx="31" fill="url(#body)"/>
+  <rect x="60" y="111" width="138" height="96" rx="25" fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-opacity="0.38"/>
+  <path d="M74 127C90 119 164 119 183 127" stroke="#FFFFFF" stroke-opacity="0.30" stroke-width="2" stroke-linecap="round"/>
+
+  <path d="M129 139C138.39 139 146 146.61 146 156C146 162.11 142.77 167.46 137.98 170.37V187H120.02V170.37C115.23 167.46 112 162.11 112 156C112 146.61 119.61 139 129 139Z" fill="#FFFFFF" fill-opacity="0.95"/>
+  <circle cx="129" cy="156" r="5.5" fill="#8B6CE0" fill-opacity="0.9"/>
+  <path d="M40 74C55 50 76 36 103 29" stroke="#FFFFFF" stroke-opacity="0.62" stroke-width="3" stroke-linecap="round"/>
+</svg>

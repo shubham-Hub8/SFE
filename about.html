@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Simple File Encryptor 3.0 documentation. Learn how local file protection works without sending files anywhere.">
+    <meta name="theme-color" content="#f4f0fa">
+    <script src="js/theme.js"></script>
+    <title>About • Simple File Encryptor 3.0</title>
+    <link rel="icon" href="public/favicon.svg">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/dark-mode.css">
+</head>
+<body class="about-page">
+
+<header class="about-navbar">
+    <div class="about-brand" aria-label="Simple File Encryptor">
+        <img src="public/logo.svg" alt="">
+        <span>Simple File Encryptor</span>
+    </div>
+
+    <div class="nav-actions">
+        <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Dark mode: off" title="Switch to dark mode">
+            <span class="theme-toggle__label">Dark mode</span>
+            <span class="theme-toggle__switch" aria-hidden="true"><span class="theme-toggle__thumb"></span></span>
+        </button>
+        <a class="back-button" href="index.html?returning=about" aria-label="Back to home" data-return-home>
+            Back
+        </a>
+    </div>
+</header>
+
+<main class="documentation">
+<header class="docs-hero">
+        <p class="eyebrow">Simple File Encryptor 3.0</p>
+        <h1>Private file encryption, kept simple.</h1>
+        <p>Everything here is designed to explain what SFE is doing in plain language first. Your files stay on your device while the app protects or restores them.</p>
+    </header>
+
+    <section class="doc-section doc-intro">
+        <h2>Version 3.0 features:</h2>
+        <div class="feature-grid">
+            <article class="feature-item"><span>🔐</span><div><h3>Argon2id + PBKDF2</h3><p>SFE3 supports modern Argon2id as the recommended KDF and PBKDF2-HMAC-SHA-256 as an alternate, widely supported option.</p></div></article>
+            <article class="feature-item"><span>🛡️</span><div><h3>AES-256-GCM</h3><p>Authenticated encryption protects the SFE3 header, encrypted manifest, and every encrypted data record.</p></div></article>
+            <article class="feature-item"><span>📦</span><div><h3>Chunked SFE3</h3><p>New SFE3 encryption processes data in fixed 1 MiB records so large files do not require one giant plaintext buffer.</p></div></article>
+            <article class="feature-item"><span>📁</span><div><h3>Private container metadata</h3><p>New encrypted containers keep names, paths, file counts, exact file sizes, and other manifest metadata inside authenticated ciphertext.</p></div></article>
+            <article class="feature-item"><span>⚡</span><div><h3>Fully local</h3><p>File data and passwords stay inside your browser while encryption or decryption is running.</p></div></article>
+            <article class="feature-item"><span>🌐</span><div><h3>Offline-ready</h3><p>The release contains its runtime code locally, so no CDN, account, or internet connection is required after loading.</p></div></article>
+        </div>
+    </section>
+
+    <section class="doc-section">
+        <h2>How encryption works</h2>
+        <ol class="steps">
+            <li><strong>Select your files.</strong> The browser reads selected data locally. Nothing is uploaded.</li>
+            <li><strong>Build an encrypted manifest.</strong> Names, relative paths, and exact sizes are placed inside a fixed-size encrypted manifest instead of being stored in a plaintext ZIP.</li>
+            <li><strong>Derive a key.</strong> SFE3 derives an AES-256 key using Argon2id or PBKDF2-HMAC-SHA-256 with a fresh 32-byte salt.</li>
+            <li><strong>Encrypt in fixed-size records.</strong> File data is processed in 1 MiB chunks with zero padding in the final chunk so individual file boundaries and exact sizes are not exposed by the container records.</li>
+            <li><strong>Authenticate every record.</strong> AES-256-GCM authenticates the public SFE3 header, record type, and record index, preventing parameter, ordering, or ciphertext tampering.</li>
+            <li><strong>Use an opaque filename.</strong> New encrypted downloads use a cryptographically random filename such as a 32-hex-character identifier followed by <code>.sfe3</code>.</li>
+            <li><strong>Download the result.</strong> The encrypted container remains local and is never uploaded by the application.</li>
+        </ol>
+    </section>
+
+    <section class="doc-section">
+        <h2>Cryptography details</h2>
+        <div class="info-table">
+            <div><span>Container</span><strong>SFE3 v1</strong></div>
+            <div><span>Key derivation</span><strong>Argon2id or PBKDF2-HMAC-SHA-256</strong></div>
+            <div><span>Argon2id</span><strong>3 passes / 4 lanes / 12–256 MiB custom</strong></div>
+            <div><span>PBKDF2</span><strong>600,000–2,000,000 iterations; 600,000 by default</strong></div>
+            <div><span>Salt</span><strong>32 random bytes per SFE3 container</strong></div>
+            <div><span>Encryption</span><strong>AES-256-GCM</strong></div>
+            <div><span>Nonce</span><strong>12-byte random container base + record counter</strong></div>
+            <div><span>Authentication tag</span><strong>128 bits per encrypted record</strong></div>
+            <div><span>Data records</span><strong>Fixed 1 MiB payload blocks</strong></div>
+        </div>
+        <p class="doc-note">Argon2id is the recommended SFE3 KDF. PBKDF2-HMAC-SHA-256 is included when a widely supported, standards-oriented KDF is preferred. Passwords are normalized with Unicode NFC for new SFE3 derivation.</p>
+    </section>
+
+    <section class="doc-section">
+        <h2>Salt, nonce and KDF costs</h2>
+        <h3>Salt</h3>
+        <p>SFE3 uses a fresh 32-byte random salt for every container. The salt is public metadata and is required for password-based key derivation; it is not intended to be secret.</p>
+        <h3>Nonce</h3>
+        <p>SFE3 creates a fresh random 12-byte nonce base for every container. A record counter is added to that base to produce a unique 96-bit AES-GCM nonce for every manifest and data record under the derived AES key. The nonce is authenticated but does not need to be secret.</p>
+        <h3>Argon2id</h3>
+        <p>The default Argon2id profile is 64 MiB, 3 passes, and 4 lanes. SFE3 exposes custom memory from 12–256 MiB. The implementation is local and based on RFC 9106. Higher memory settings increase the resources required for password guessing but also increase device RAM use.</p>
+        <h3>PBKDF2</h3>
+        <p>SFE3 uses PBKDF2-HMAC-SHA-256 with 600,000–2,000,000 iterations; 600,000 by default. PBKDF2 is an alternative KDF; Argon2id remains the preferred choice for new files.</p>
+    </section>
+
+    <section class="doc-section">
+        <h2>The SFE3 file format</h2>
+        <p>The public SFE3 header contains only what is required to select the decryption algorithm and reproduce key derivation: version, KDF identifier, cipher identifier, KDF parameters, a 32-byte salt, and a 12-byte nonce base.</p>
+        <pre class="format-block">SFE3 header | encrypted fixed-size manifest record | encrypted fixed-size data records</pre>
+        <p>The header is authenticated as AES-GCM additional authenticated data. Every record also authenticates its type and record index. New containers therefore do not need a plaintext ZIP or per-file plaintext names.</p>
+    </section>
+
+    <section class="doc-section">
+        <h2>Metadata protection</h2>
+        <ul class="clean-list">
+            <li>Original filenames are not used as the encrypted download filename.</li>
+            <li>Folder paths are stored only inside the encrypted manifest.</li>
+            <li>File count and exact per-file sizes are stored only inside the encrypted manifest.</li>
+            <li>File MIME types and filesystem timestamps are intentionally not stored by SFE3.</li>
+            <li>Each data record is fixed-size; the final record is padded so the exact plaintext length is not directly encoded in the record size.</li>
+            <li>The overall container size still reveals an approximate amount of encrypted data. SFE3 reduces metadata leakage but cannot make file size information disappear without potentially very large padding.</li>
+        </ul>
+    </section>
+    <section class="doc-section">
+        <h2>Privacy & limitations</h2>
+        <ul class="clean-list">
+            <li>Your files are processed locally in the browser.</li>
+            <li>Your password is not stored or transmitted by the application.</li>
+            <li>There are no accounts, cloud uploads, advertisements, analytics, or tracking built into the application.</li>
+            <li>Individual files up to 1 GB are accepted. New SFE3 processing is chunked, but browser and device limits still apply.</li>
+            <li>A forgotten password cannot be recovered. Keep a secure backup of important encrypted files and their passwords.</li>
+            <li>This project has not undergone an independent cryptographic security audit; the browser, operating system, and release files remain part of the security boundary.</li>
+        </ul>
+    </section>
+
+    <section class="doc-section final-section">
+        <h2>Open source</h2>
+        <p>Simple File Encryptor is an open-source project focused on privacy, straightforward UX, and local file encryption.</p>
+        <a class="github-link" href="https://github.com/shubham-Hub8/SFE/tree/main" target="_blank" rel="noopener noreferrer">View the project on GitHub ↗</a>
+    </section>
+</main>
+
+<footer>
+    <p>Simple File Encryptor</p>
+    <p>Version 3.0 · Local encryption with Argon2id + AES-256-GCM</p>
+</footer>
+
+</body>
+</html>

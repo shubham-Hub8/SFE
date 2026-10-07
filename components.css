@@ -1,0 +1,235 @@
+/*
+   SIMPLE FILE ENCRYPTOR 3.0 — COMPONENT OVERRIDES
+   Functional selectors are intentionally preserved.
+*/
+
+/* A soft surface for controls that previously referenced an undefined
+   --panel-alt token in the older theme. */
+:root{
+    --panel-alt:rgba(255,255,255,.38);
+}
+
+.mode-selector + .workflow-card{
+    margin-top:0;
+}
+
+.workflow-card input[type="file"]{
+    display:none;
+}
+
+#selectedFile{
+    margin-top:15px;
+    min-height:25px;
+    color:var(--ink-faint);
+    font-size:.9rem;
+    word-break:break-word;
+}
+
+/* Keep the browser's native select functionality, but make its closed state
+   visually fit the new material system. */
+.security-options select{
+    color:var(--ink);
+}
+
+/* Disabled controls should still look intentional rather than flashing gray. */
+.picker-option:disabled{
+    opacity:.48;
+}
+
+/* Make the password area breathe without changing its structure. */
+.workflow-card .password-generator{
+    margin-bottom:2px;
+}
+
+.workflow-card .output{
+    margin-bottom:0;
+}
+
+/* ---------- Final control polish ---------- */
+
+.back-button::after{
+    content:"";
+}
+
+.tip-rail__viewport span{
+    text-overflow:ellipsis;
+}
+
+@media(max-width:560px){
+    .intro-card{
+        padding:24px 21px 21px;
+        border-radius:23px;
+    }
+}
+
+/* ---------- Inbuilt password-protection picker ---------- */
+
+.native-kdf{
+    position:absolute !important;
+    width:1px !important;
+    height:1px !important;
+    margin:-1px !important;
+    padding:0 !important;
+    border:0 !important;
+    opacity:0 !important;
+    pointer-events:none !important;
+    overflow:hidden !important;
+}
+
+.kdf-picker{
+    position:relative;
+    z-index:7;
+}
+
+.kdf-picker__trigger{
+    width:100%;
+    min-height:50px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding:12px 14px 12px 16px;
+    border:1px solid rgba(119,98,151,.18);
+    border-radius:16px;
+    background:rgba(255,255,255,.48);
+    color:var(--ink);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.78),0 6px 16px rgba(70,48,100,.035);
+    text-align:left;
+    font-weight:720;
+}
+
+.kdf-picker__trigger::before{
+    opacity:.48;
+}
+
+.kdf-picker__trigger::after{
+    content:"";
+    position:absolute;
+    top:1px;
+    bottom:1px;
+    left:-45%;
+    width:30%;
+    border-radius:inherit;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.54),transparent);
+    transform:translateX(0) skewX(-18deg);
+    opacity:0;
+    pointer-events:none;
+}
+
+.kdf-picker.is-open .kdf-picker__trigger{
+    border-color:rgba(134,103,247,.32);
+    background:rgba(255,255,255,.64);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.92),0 12px 24px rgba(76,54,111,.07),0 0 18px rgba(134,103,247,.06);
+}
+
+.kdf-picker__chevron{
+    display:grid;
+    place-items:center;
+    width:26px;
+    height:26px;
+    flex:none;
+    border:1px solid rgba(255,255,255,.78);
+    border-radius:9px;
+    background:rgba(255,255,255,.5);
+    color:#7458da;
+    font-size:.92rem;
+    line-height:1;
+    transition:transform 180ms var(--ease),background 180ms var(--ease);
+}
+
+.kdf-picker.is-open .kdf-picker__chevron{
+    transform:rotate(180deg);
+    background:rgba(255,255,255,.72);
+}
+
+.kdf-picker__menu{
+    position:absolute;
+    inset:calc(100% + 7px) 0 auto;
+    padding:6px;
+    border:1px solid rgba(255,255,255,.88);
+    border-radius:17px;
+    background:rgba(255,255,255,.78);
+    box-shadow:0 18px 40px rgba(70,48,100,.12),inset 0 1px 0 rgba(255,255,255,.98);
+    -webkit-backdrop-filter:blur(15px) saturate(115%);
+    backdrop-filter:blur(15px) saturate(115%);
+    transform-origin:top center;
+}
+
+.kdf-picker__menu[hidden]{
+    display:none;
+}
+
+.kdf-picker.is-open .kdf-picker__menu{
+    animation:kdfMenuIn 180ms var(--ease) both;
+}
+
+.kdf-picker__option{
+    position:relative;
+    width:100%;
+    min-height:48px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding:10px 12px 10px 13px;
+    border:1px solid transparent;
+    border-radius:13px;
+    background:transparent;
+    color:var(--ink);
+    text-align:left;
+    font-weight:720;
+    transition:transform 150ms var(--ease),background 150ms var(--ease),border-color 150ms var(--ease),box-shadow 150ms var(--ease);
+}
+
+.kdf-picker__option small{
+    color:var(--ink-faint);
+    font-size:.75rem;
+    font-weight:700;
+}
+
+.kdf-picker__option:hover,
+.kdf-picker__option:focus-visible{
+    background:rgba(243,238,255,.64);
+    border-color:rgba(134,103,247,.13);
+    transform:translateX(1px);
+}
+
+.kdf-picker__option.is-selected{
+    background:linear-gradient(100deg,rgba(246,237,253,.72),rgba(237,236,255,.58));
+    border-color:rgba(255,255,255,.72);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.88);
+}
+
+.kdf-picker__option.is-selected::before{
+    content:"";
+    width:6px;
+    height:6px;
+    position:absolute;
+    left:5px;
+    top:50%;
+    transform:translateY(-50%);
+    border-radius:50%;
+    background:linear-gradient(135deg,var(--pink),var(--purple),var(--cyan));
+    box-shadow:0 0 10px rgba(134,103,247,.22);
+}
+
+.kdf-picker__option.is-selected > span{
+    padding-left:6px;
+}
+
+@keyframes kdfMenuIn{
+    from{opacity:0;transform:translateY(-4px) scale(.985)}
+    to{opacity:1;transform:translateY(0) scale(1)}
+}
+
+/* Keep later workflow cards isolated so mobile browsers have less paint work. */
+.workflow-card + .workflow-card{
+    contain:style layout;
+}
+
+@supports(content-visibility:auto){
+    .workflow-card:nth-of-type(n+4){
+        content-visibility:auto;
+        contain-intrinsic-size:320px;
+    }
+}

@@ -1,0 +1,911 @@
+SIMPLE FILE ENCRYPTOR 3.0
+SFE3 SECURITY IMPLEMENTATION, FILE-FORMAT DESCRIPTION, AND RELEASE VERIFICATION
+
+Document purpose
+================
+
+This document explains the security-focused changes in Simple File Encryptor 3.0. It is intentionally detailed so the release can be inspected without having to infer what the JavaScript is trying to do from the user interface alone.
+
+The 3.0 build was produced from the supplied Simple File Encryptor 2.1 package. The visual redesign requested for the future UI pass is intentionally NOT part of this security build. The existing CSS visual system was left alone; this release concentrates on cryptographic behavior, file-format privacy, validation, memory handling, password generation, compatibility and verification.
+
+IMPORTANT SECURITY STATEMENT
+============================
+
+This project has NOT undergone an independent professional cryptographic security audit. The tests described here are implementation verification tests, not a certification of security. Passing test vectors and round-trip tests cannot prove that an implementation is free from all cryptographic, browser, memory, side-channel or integration vulnerabilities.
+
+The release is designed to provide strong authenticated encryption and substantially reduce metadata leakage compared with the older SFE1/SFE2 container designs. Users should still protect their passwords, operating-system accounts and encrypted files appropriately.
+
+
+1. HIGH-LEVEL SECURITY GOALS
+============================
+
+SFE3 was designed around the following goals:
+
+1. Use a password-based KDF that makes offline password guessing expensive.
+2. Offer Argon2id as the preferred modern KDF and PBKDF2-HMAC-SHA-256 as an alternative.
+3. Derive a 256-bit AES key locally without uploading passwords or files.
+4. Use authenticated encryption so modified ciphertext, modified parameters and reordered records are rejected.
+5. Stop exposing original filenames in the outer encrypted filename.
+6. Stop exposing multi-file folder names and ZIP entry names in plaintext.
+7. Keep the SFE3 manifest encrypted rather than putting file names and sizes in a plaintext archive.
+8. Reduce exact individual-size leakage by encrypting fixed-size data records with padding.
+9. Avoid storing unnecessary metadata such as MIME types and filesystem timestamps.
+10. Keep older SFE1 and SFE2 encrypted files decryptable so the security upgrade does not strand older user data.
+11. Keep the application self-contained and portable so the cryptographic implementation is present locally rather than fetched from a third-party server.
+12. Make the security properties explicit enough that the container format can be inspected independently.
+
+These goals do NOT include a promise that every possible metadata side channel is eliminated. The browser and operating system still know that a file was selected, the browser process can observe the original filename while the user is operating the application, and the final encrypted file necessarily has a measurable byte length.
+
+
+2. SFE3 CONTAINER FORMAT
+========================
+
+Every newly encrypted file is a binary SFE3 container. It is NOT a ZIP file and does not contain a plaintext archive of encrypted file entries.
+
+The outer structure is:
+
+    64-byte authenticated-format header
+    1 fixed-size encrypted manifest record
+    N fixed-size encrypted data records
+
+The public header is exactly 64 bytes.
+
+Byte layout:
+
+    Bytes 0-3    ASCII "SFE3"
+    Byte 4       format version (1)
+    Byte 5       KDF identifier
+                 1 = Argon2id
+                 2 = PBKDF2-HMAC-SHA-256
+    Byte 6       cipher identifier
+                 1 = AES-256-GCM
+    Byte 7       flags
+                 currently required to be 0
+    Bytes 8-11   KDF cost field 1, unsigned little-endian 32-bit
+    Bytes 12-15  KDF cost field 2, unsigned little-endian 32-bit
+    Bytes 16-19  KDF cost field 3, unsigned little-endian 32-bit
+    Bytes 20-51  fresh 32-byte salt
+    Bytes 52-63  fresh 12-byte nonce base
+
+For Argon2id, the KDF cost fields mean:
+
+    cost1 = memory in KiB
+    cost2 = passes
+    cost3 = lanes/parallelism
+
+For PBKDF2:
+
+    cost1 = iteration count
+    cost2 = 0
+    cost3 = 0
+
+Unknown flags, unknown cipher identifiers, unsupported KDF identifiers and invalid KDF parameter ranges are rejected.
+
+The header is public because decryption needs the algorithm and its parameters. It is NOT a password secret. What matters is that the header is authenticated by every SFE3 AES-GCM record so an attacker cannot silently change the password KDF or cipher parameters without causing authentication to fail.
+
+
+3. AES-256-GCM
+==============
+
+SFE3 uses AES-256-GCM through the browser's Web Crypto API.
+
+The derived key is exactly 32 bytes (256 bits). The AES key is imported into Web Crypto as a non-extractable CryptoKey. This means the application does not need to hold the final key as ordinary JavaScript bytes after key import.
+
+Each encrypted record receives a 128-bit GCM authentication tag.
+
+AES-GCM provides two required properties for SFE3:
+
+    confidentiality:
+        plaintext is encrypted
+
+    authentication/integrity:
+        modification of ciphertext or authenticated associated data causes decryption failure
+
+The application deliberately uses AES-GCM as an authenticated-encryption primitive instead of inventing a custom encryption/MAC construction.
+
+
+4. SFE3 RECORD FORMAT
+=====================
+
+Each encrypted record is:
+
+    1 byte   record type
+    12 bytes record nonce
+    ciphertext including the 16-byte GCM authentication tag
+
+Record types currently are:
+
+    1 = manifest
+    2 = file data
+
+The manifest record plaintext payload is exactly 1 MiB.
+
+The data record plaintext payload is exactly 1 MiB + 4 bytes:
+
+    bytes 0-3       actual plaintext length for this chunk
+    bytes 4-...     file data
+    unused bytes    zero padding
+
+The AES-GCM ciphertext is therefore a fixed size for every data record.
+
+This fixed-record design prevents the older pattern of putting each encrypted file into a plaintext ZIP entry where the ZIP directory directly exposes names, entry structure and individual sizes.
+
+The last data record is padded to a full 1 MiB payload. Its 4-byte actual-length field tells the authenticated decryption routine how many bytes are real. The value itself is encrypted and authenticated.
+
+The manifest is also fixed-size. Its first 4 plaintext bytes contain the JSON manifest length and the remaining bytes are zero-filled. Both the length and the manifest content are encrypted, so the plaintext container does not expose the manifest size or its file-name strings.
+
+Exact byte sizes are:
+
+    header:             64 bytes
+    manifest record:   1 + 12 + 1,048,576 + 16 = 1,048,605 bytes
+    data record:       1 + 12 + 4 + 1,048,576 + 16 = 1,048,609 bytes
+
+For total plaintext size T greater than zero:
+
+    N = ceiling(T / 1,048,576)
+
+and the resulting SFE3 container size is:
+
+    64 + 1,048,605 + N * 1,048,609
+
+Therefore the outer container leaks the total plaintext size rounded up to a 1 MiB chunk boundary. It does not reveal the exact size of every individual file.
+
+This is a deliberate and documented trade-off. Zero metadata leakage is not a realistic promise when the observer can always inspect the encrypted file's total byte length.
+
+
+5. NONCE DESIGN
+===============
+
+AES-GCM requires nonce uniqueness for a given key. SFE3 uses a fresh random 12-byte (96-bit) nonce base for every container.
+
+For record index i, the actual record nonce is:
+
+    nonce_i = nonceBase + i  (addition performed over the 96-bit value)
+
+The manifest is record 0. Data records begin at record 1.
+
+The record index is stored in the authenticated additional data and the computed nonce is compared with the serialized nonce before Web Crypto decryption is attempted.
+
+This construction gives each record a deterministic unique nonce under the same derived key while the random base ensures different containers do not intentionally reuse the same nonce sequence.
+
+The nonce does NOT need to be secret. It exists to satisfy AES-GCM nonce uniqueness requirements.
+
+SFE3 intentionally uses the standard 96-bit AES-GCM nonce size rather than making the nonce longer merely to appear more secure. A larger nonce is not automatically stronger for AES-GCM.
+
+
+6. SALT DESIGN
+==============
+
+SFE3 uses a fresh 32-byte random salt for every container.
+
+The salt comes from the browser's cryptographically secure random source:
+
+    crypto.getRandomValues()
+
+The salt is public metadata. It prevents two containers encrypted with the same password from automatically using the same KDF input and derived key.
+
+The 32-byte size is deliberately generous for a password KDF salt. It is not treated as a secret key.
+
+Legacy SFE2 containers use their original 16-byte salt because their format must remain decryptable. SFE3 does not reuse that weaker/older field size.
+
+
+7. ARGON2ID IMPLEMENTATION
+===========================
+
+Argon2id is the recommended SFE3 KDF.
+
+The implementation is a self-contained local JavaScript implementation of the RFC 9106 Argon2id construction. It uses 64-bit arithmetic represented through paired 32-bit words because ordinary JavaScript does not provide a fast native 64-bit integer array type appropriate for this workload.
+
+The implementation contains:
+
+    - Blake2b initialization and compression
+    - Argon2 variable-length hash H'
+    - Argon2 block compression
+    - Argon2id addressing rules
+    - Argon2 pass/slice/lane processing
+    - Argon2id final block XOR and output extraction
+
+SFE3 default profile:
+
+    memory = 64 MiB
+    passes = 3
+    lanes = 4
+    output key = 32 bytes
+
+The UI permits a custom whole-MiB memory value from 12 MiB through 256 MiB.
+
+The parser enforces 12 MiB <= memory <= 256 MiB.
+
+The implementation additionally enforces the Argon2 structural relationship that memory must be at least 8 times the lane count. Passes are restricted to 1-32 and lanes to 1-16 in SFE3 parsing.
+
+Password bytes, salt bytes and derived key material are zeroed when practical after use. JavaScript and browser garbage collection mean that this should be understood as best-effort memory hygiene, not a guarantee that no historical copy can ever remain in the process.
+
+The SFE3 implementation was tested against the RFC 9106 Argon2id test vector that includes password, salt, secret and associated data. The exact 32-byte expected output is:
+
+    0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659
+
+The release implementation produced this exact output.
+
+The implementation was also cross-checked against argon2-cffi for multiple parameter sets covering different memory costs, pass counts, lane counts and Unicode passwords. Those cross-checks produced byte-for-byte identical outputs.
+
+IMPORTANT:
+
+Argon2id is CPU- and especially memory-intensive in JavaScript. A large memory setting can make a phone or lower-memory device slow or temporarily uncomfortable. That is a cost of making offline password guessing more expensive.
+
+
+8. PBKDF2-HMAC-SHA-256 IMPLEMENTATION
+=====================================
+
+SFE3 also supports PBKDF2-HMAC-SHA-256.
+
+Default SFE3 setting:
+
+    600,000 iterations
+    derived key length = 32 bytes
+    salt = fresh 32-byte SFE3 salt
+
+The implementation delegates PBKDF2 computation to the browser's Web Crypto API rather than implementing HMAC/PBKDF2 manually in application code.
+
+Argon2id is the recommended default for SFE3 because it is memory-hard. PBKDF2 remains useful where a conventional password KDF with very broad standards and platform familiarity is desired.
+
+SFE3 parser limits PBKDF2 to 600,000 through 2,000,000 iterations. The encryption security layer reads the selected iteration count from application security state instead of hardcoding 600,000. The UI exposes 600,000–2,000,000 whole-number iterations, while definitive range validation remains at the cryptographic boundary. The exact selected value is stored in the SFE3 header so decryption reproduces the same work factor.
+
+Legacy SFE1 remains at its original PBKDF2 construction and 250,000 iterations because changing the legacy parameters would make existing SFE1 files undecryptable.
+
+
+9. PASSWORD HANDLING
+====================
+
+New SFE3 passwords are normalized using Unicode NFC before KDF input is produced. This is intended to reduce accidental differences between visually equivalent Unicode representations.
+
+SFE3 encryption passwords must contain 12-128 Unicode code points.
+
+The application rejects obvious weak patterns such as:
+
+    123456
+    12345678
+    password
+    password123
+    qwerty
+    repeated single characters
+    simple sequential alphabet/digit strings
+
+The application no longer relies on arbitrary "one uppercase + one number + one symbol" scoring as the main security rule. Length and predictability are more meaningful properties than a cosmetic complexity checklist.
+
+The cryptographic encryption function enforces the 12-128 length range itself, rather than trusting only the visible UI validation.
+
+This matters because client-side code can have multiple paths into a function and security validation should exist at the security boundary, not only in a UI event handler.
+
+
+10. SECURE PASSWORD GENERATOR
+=============================
+
+SFE3 includes a local password generator.
+
+Default generated password length:
+
+    32 characters
+
+The generator uses:
+
+    crypto.getRandomValues()
+
+and rejection sampling when mapping random 32-bit values onto the selected character alphabet. Rejection sampling avoids introducing modulo bias that would occur if arbitrary 32-bit values were simply reduced with `% alphabetLength` without discarding the incomplete remainder of the 2^32 range.
+
+No password is sent to a server. The generated value is placed into the local password controls only.
+
+The generator is a security convenience, not a replacement for a password manager. A generated password should still be stored somewhere safe if the user needs to recover the encrypted file later.
+
+
+11. METADATA AND FILENAME LEAKAGE PROTECTION
+============================================
+
+Older SFE2 encryption used filenames in ways that could reveal the original filename at the outer file layer, and the multi-file workflow used a ZIP structure around individually encrypted files. A plaintext ZIP necessarily exposes its entry directory even if every entry payload is encrypted.
+
+SFE3 removes that design.
+
+New outer encrypted filename:
+
+    32 cryptographically random hexadecimal characters + .sfe3
+
+The original filename is NOT used for the new encrypted container filename.
+
+For multi-file encryption:
+
+    original files
+        -> encrypted manifest + encrypted data records
+        -> opaque SFE3 container
+
+There is no plaintext ZIP surrounding the encrypted data.
+
+The encrypted manifest contains only information required for reconstruction, currently:
+
+    format
+    manifest version
+    fixed chunk size
+    original relative path
+    original file size
+
+MIME types are not stored.
+Filesystem timestamps are not stored.
+
+The manifest is authenticated ciphertext, so changing a filename, path or size inside a container without the password causes AES-GCM authentication to fail.
+
+A decrypted multi-file container can be rebuilt into a normal ZIP only AFTER all SFE3 records have been authenticated and decrypted. That plaintext ZIP exists only as a local post-decryption output artifact; it is never the on-disk SFE3 input structure.
+
+For a single decrypted SFE3 file, the output name is reconstructed from the final path component of the encrypted manifest path.
+
+SFE3 deliberately does not claim that the browser cannot see the original filename during selection. A browser obviously provides the selected File object to the application, so the application necessarily has local access to that name while processing it. The protection goal is that the filename is not unnecessarily persisted in the encrypted artifact.
+
+Existing SFE1/SFE2 files cannot be retroactively repaired. If their legacy outer filename already exposes an original filename, that leakage existed before SFE3. The correct migration path is:
+
+    legacy file -> decrypt -> new SFE3 encrypt
+
+
+12. FIXED-SIZE PADDING
+======================
+
+SFE3 data records always reserve a full 1 MiB payload area.
+
+For a short final chunk, the application stores:
+
+    4-byte actual length
+    actual plaintext bytes
+    zero padding until the 1 MiB payload area is full
+
+The actual length is encrypted and authenticated.
+
+As a result, a 1-byte plaintext and a 900,000-byte plaintext still produce the same single data-record size when all other format conditions are equal.
+
+This was verified during release testing.
+
+This does not hide total file/container size completely because the number of fixed-size records is still visible. The design hides the exact size and individual boundaries within a record while keeping padding bounded and practical.
+
+
+13. AUTHENTICATED ADDITIONAL DATA (AAD)
+========================================
+
+Every SFE3 record authenticates the following AAD:
+
+    64-byte SFE3 header
+    1-byte record type
+    4-byte record index
+
+This is important for three reasons.
+
+First, the KDF parameters and salt/nonce base in the public header cannot be silently altered.
+
+Second, a manifest record cannot be swapped with a data record without authentication failure.
+
+Third, records cannot simply be reordered because the record index is authenticated.
+
+The record's expected nonce is additionally checked against the serialized nonce in the record.
+
+
+14. STRUCTURAL VALIDATION
+=========================
+
+The SFE3 parser validates:
+
+    - exact 64-byte header size
+    - magic bytes
+    - format version
+    - supported cipher identifier
+    - flags must be zero
+    - supported KDF identifier
+    - valid Argon2id ranges
+    - valid PBKDF2 ranges
+    - exact 32-byte salt
+    - exact 12-byte nonce base
+    - valid record type
+    - exact fixed record size
+    - expected record nonce
+    - authenticated manifest
+    - manifest version
+    - manifest chunk size
+    - valid relative paths
+    - no duplicate normalized paths
+    - valid per-file sizes
+    - valid total plaintext size
+    - data-record count consistent with the authenticated manifest
+    - each chunk actual-length field consistent with remaining plaintext
+    - final reconstructed byte count exactly equal to authenticated manifest total
+
+The application rejects absolute paths, drive-qualified paths, parent-directory traversal components and NUL characters in stored relative paths.
+
+The maximum individual file size is 1 GiB.
+
+The maximum total SFE3 plaintext size is just below 4 GiB.
+
+The maximum manifest file count is 50,000, subject to the fixed manifest record's own byte capacity.
+
+
+15. ZIP HANDLING AFTER DECRYPTION
+==================================
+
+The `zip.js` module is no longer part of the encryption container format.
+
+It is an output helper used only after a multi-file SFE3 container has been successfully authenticated and decrypted.
+
+ZIP entry paths are sanitized before output.
+
+The ZIP writer uses deterministic metadata rather than copying filesystem timestamps from the source selection. This keeps SFE3 itself from storing that metadata and avoids propagating arbitrary source metadata into a reconstructed archive.
+
+The ZIP is therefore a convenient decrypted-output format, not the security boundary.
+
+
+16. LEGACY SFE1 AND SFE2 COMPATIBILITY
+=======================================
+
+SFE3 is a new format. SFE1 and SFE2 were not silently modified because their binary format and cryptographic parameters must remain stable for existing files to decrypt.
+
+SFE1 compatibility:
+
+    - magic: SFE1
+    - original PBKDF2-HMAC-SHA-256 construction
+    - 250,000 PBKDF2 iterations
+    - 16-byte legacy salt
+    - 12-byte legacy IV/nonce
+    - AES-GCM
+
+SFE2 compatibility:
+
+    - magic: SFE2
+    - version 1
+    - legacy Argon2id parameters stored in the SFE2 header
+    - 16-byte legacy salt
+    - 12-byte legacy IV/nonce
+    - AES-256-GCM
+    - legacy header used as AAD
+
+The legacy Argon2id implementation is retained separately as `js/argon2id-legacy.js`. This separation is deliberate. It means the SFE3 Argon2 implementation can evolve without accidentally changing the exact algorithm used to read historical SFE2 containers.
+
+For old encrypted files, compatibility is more important than changing the old file format after release.
+
+Recommended migration:
+
+    1. Open the old SFE1 or SFE2 file.
+    2. Decrypt it with the original password.
+    3. Encrypt the recovered plaintext again using SFE3.
+    4. Retire the old encrypted copy when appropriate.
+
+
+17. MEMORY HYGIENE
+===================
+
+Sensitive byte arrays are zeroed after their last required use whenever the JavaScript runtime permits a clear ownership point.
+
+Examples include:
+
+    - password UTF-8 byte arrays
+    - KDF key material
+    - salts after key derivation
+    - nonce-base arrays after encryption
+    - encrypted record read buffers after decryption
+    - plaintext chunk buffers after encryption
+    - the fixed manifest block after encryption/parsing
+    - legacy buffers after successful conversion to the output Blob
+
+This is best-effort hygiene. JavaScript strings are immutable and browser garbage collection is outside application control. Therefore no browser JavaScript application can honestly promise that all historical copies of a password are instantly removed from process memory.
+
+The final Web Crypto AES key is imported as a non-extractable CryptoKey.
+
+
+18. CONCURRENCY AND BUSY-STATE PROTECTION
+==========================================
+
+The top-level application action checks the `State.busy` flag before beginning a new operation.
+
+The UI also disables the relevant controls while processing.
+
+This prevents accidental double-submission from creating overlapping encryption operations from the same visible application state.
+
+This is not itself a cryptographic primitive, but it reduces state-confusion bugs around file selection, progress reporting and output handling.
+
+
+19. SECURITY-RELEVANT BUG FIXES INCLUDED IN 3.0
+================================================
+
+The following non-visual fixes are part of the security build:
+
+A. Output filename leakage
+
+The older pattern of deriving the new encrypted filename from the selected file is removed for SFE3. New outputs receive opaque random `.sfe3` names.
+
+B. Plaintext ZIP metadata leakage
+
+The previous multi-file architecture stored encrypted files inside a plaintext ZIP. SFE3 stores the manifest and all data in one encrypted container instead.
+
+C. Fixed-size chunk padding
+
+Data records are padded to a full 1 MiB payload, preventing the encrypted record from directly exposing the exact length of the final chunk.
+
+D. Password policy is enforced at the crypto boundary
+
+The UI performs password validation, and the SFE3 encryption function also enforces the 12-128 code-point rule and obvious-weak-password rejection.
+
+E. Legacy promise cleanup
+
+Legacy Web Crypto decrypt calls use `await` before sensitive legacy input buffers are cleared, ensuring cleanup happens after the Web Crypto operation has accepted and completed the decryption promise.
+
+F. Plaintext chunk ownership during SFE3 decryption
+
+Decrypted chunk portions are copied into independent arrays before the shared plaintext record buffer is wiped. This avoids a reference-aliasing bug where zeroing the shared record could otherwise zero the output parts before Blob construction.
+
+G. Per-chunk cleanup on encryption failures
+
+SFE3 plaintext chunk buffers are cleared in a `finally` block so an exception during record encryption does not bypass the cleanup path for that chunk.
+
+H. Password strength tracking was hardened
+
+The password tracker now combines length, character diversity and uniqueness with explicit penalties for common passwords, repeated chunks, repeated characters, sequential runs and common keyboard patterns. It reports a 0-100 heuristic score and strength label without pretending to measure exact cryptographic entropy.
+
+I. Custom PBKDF2 iteration plumbing was added
+
+The SFE3 encryption configuration no longer hardcodes 600,000 iterations. A validated application security setting supplies the PBKDF2 cost field, constrained to 600,000 through 2,000,000 iterations. The exact selected value is encoded in the SFE3 header and therefore becomes part of the authenticated KDF configuration used for later decryption.
+
+The home UI now exposes the custom PBKDF2 iteration control directly. The separate glassmorphism/visual redesign remains intentionally out of scope for this build.
+
+J. Unnecessary release text files were removed
+
+The final package contains one detailed security text document instead of multiple stale build/release `.txt` files.
+
+
+20. VERIFICATION PERFORMED FOR THIS RELEASE
+============================================
+
+The following verification was executed against the security implementation before packaging.
+
+TEST 1: JavaScript syntax
+
+All JavaScript files in the release source tree passed Node.js `--check` syntax validation.
+
+TEST 2: RFC 9106 Argon2id vector
+
+Input used:
+
+    password: 32 bytes of 0x01
+    salt:     16 bytes of 0x02
+    secret:    8 bytes of 0x03
+    AAD:      12 bytes of 0x04
+    m:        32 KiB
+    t:        3
+    p:        4
+    output:   32 bytes
+
+Expected and produced:
+
+    0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659
+
+Result: PASS
+
+TEST 3: Cross-library Argon2id verification
+
+The SFE3 implementation was compared against argon2-cffi using multiple independent cases, including:
+
+    alpha / 8 KiB / t=1 / p=1
+    beta😀 / 32 KiB / t=2 / p=2
+    gamma password / 64 KiB / t=2 / p=4
+
+The outputs were byte-for-byte identical.
+
+Result: PASS
+
+TEST 4: SFE3 Argon2id round trip
+
+Plaintext was encrypted with SFE3 Argon2id, decrypted with the same password and compared byte-for-byte with the source plaintext.
+
+Result: PASS
+
+TEST 5: SFE3 PBKDF2 round trip
+
+Plaintext was encrypted with SFE3 PBKDF2-HMAC-SHA-256 at the 600,000-iteration default, decrypted with the same password and compared byte-for-byte with the source plaintext.
+
+Result: PASS
+
+TEST 6: PBKDF2 custom iteration configuration
+
+The security configuration accepted a valid custom iteration count of 1,000,000, rejected values below 600,000 and above 2,000,000, and encoded the selected 1,000,000 value into the SFE3 header cost field. A matching Web Crypto PBKDF2 derivation produced the same key material as a reference PBKDF2 implementation.
+
+Result: PASS
+
+TEST 7: Password-strength regression cases
+
+The updated tracker classified obvious repeated, sequential, keyboard-pattern and common-password inputs as weak or very weak while rewarding increased length, diversity and uniqueness. The score is explicitly labeled as a heuristic rather than exact entropy.
+
+Result: PASS
+
+TEST 8: Filename and path leakage scan
+
+Encrypted SFE3 binary output was searched for the original plaintext filename and relative path strings.
+
+Result: PASS — the source filename/path was not present in the encrypted container tested.
+
+TEST 9: Multi-file metadata scan
+
+A multi-file SFE3 container containing distinct secret filenames and directory paths was scanned for those strings and for MIME metadata.
+
+Result: PASS — manifest metadata was encrypted.
+
+TEST 10: Fixed-record padding
+
+Different plaintext lengths that fit inside the same 1 MiB record bucket were encrypted. The output container sizes were compared.
+
+Result: PASS — the same fixed record size was produced.
+
+TEST 11: Wrong-password rejection
+
+SFE3 Argon2id and PBKDF2 containers were decrypted with an incorrect password.
+
+Result: PASS — decryption failed.
+
+TEST 12: Header tamper rejection
+
+The SFE3 header was modified after encryption.
+
+Result: PASS — authentication/structure validation rejected the modified file.
+
+TEST 13: Path traversal rejection
+
+A manifest input containing `../` traversal was passed to SFE3 encryption.
+
+Result: PASS — path was rejected.
+
+TEST 14: Weak-password rejection
+
+Obvious weak SFE3 encryption passwords were passed directly to the encryption function, bypassing the visible UI validation layer.
+
+Result: PASS — cryptographic entry point rejected them.
+
+TEST 15: Legacy SFE2 compatibility
+
+A valid SFE2 container was generated using the legacy Argon2id construction and then decrypted by the SFE3 release code.
+
+Result: PASS — original plaintext recovered.
+
+TEST 16: Legacy SFE1 compatibility
+
+A valid SFE1 container was generated using the original PBKDF2 construction and then decrypted by the SFE3 release code.
+
+Result: PASS — original plaintext recovered.
+
+TEST 17: UI/security-control wiring
+
+The home page exposes KDF selection, custom PBKDF2 iterations (600,000–2,000,000), custom Argon2id memory (12–256 MiB), and a score-bearing password strength meter. The controls update application security state used by SFE3 encryption.
+
+Result: PASS
+
+TEST 18: UI/CSS scope check
+
+The build adds functional security controls without introducing the planned full glassmorphism redesign.
+
+Result: PASS — no CSS visual redesign was introduced in this security-first release.
+
+
+21. FILES AND COMPONENTS IN THE RELEASE
+========================================
+
+Main application:
+
+    index.html
+    about.html
+
+Styles:
+
+    css/main.css
+    css/components.css
+    css/animations.css
+
+Core JavaScript:
+
+    js/app.js
+    js/crypto.js
+    js/password.js
+    js/utils.js
+    js/ui.js
+    js/file.js
+    js/zip.js
+    js/download.js
+    js/dragdrop.js
+
+Cryptographic implementations:
+
+    js/argon2id.js
+        SFE3 Argon2id implementation
+
+    js/argon2id-legacy.js
+        compatibility implementation for historical SFE2 files
+
+Public assets:
+
+    public/favicon.svg
+    public/logo.svg
+    public/manifest.json
+
+Documentation:
+
+    README.md
+    THIRD-PARTY-NOTICES.md
+    SFE3-SECURITY-IMPLEMENTATION-AND-AUDIT.txt
+
+The obsolete release/build `.txt` files from the supplied package were deliberately removed. The test README and crawler-only `robots.txt` were also removed from the portable release because they are not required for the local application.
+
+
+22. FILES THAT ARE NOT PART OF THE NEW SECURITY BOUNDARY
+=========================================================
+
+The following should not be interpreted as SFE3 cryptographic components:
+
+    - HTML/CSS presentation code
+    - drag-and-drop event code
+    - progress UI
+    - download UI
+    - password strength display
+    - ZIP output generation after decryption
+
+The security boundary for a newly encrypted container is primarily:
+
+    password normalization/validation
+    -> KDF
+    -> AES-256-GCM
+    -> SFE3 header
+    -> SFE3 manifest
+    -> fixed-size data records
+    -> authenticated record structure
+
+
+23. THREAT MODEL
+================
+
+SFE3 is designed primarily against an attacker who obtains a copy of an encrypted SFE3 file but does not know the password.
+
+The attacker should not be able to:
+
+    - recover plaintext without guessing the password
+    - change ciphertext without authentication failure
+    - change KDF parameters without authentication failure
+    - reorder records without authentication failure
+    - read the original filename from the SFE3 outer filename
+    - read the encrypted manifest without the password
+    - see plaintext folder paths from the SFE3 container
+    - see exact individual file boundaries from record sizes
+
+The attacker can still observe:
+
+    - the fact that an SFE3 file exists
+    - the public SFE3 format identifier and version
+    - KDF type and KDF cost parameters
+    - the random salt
+    - the random nonce base
+    - total encrypted file size
+    - approximately how much plaintext data the file contains from the fixed-size record count
+    - whatever information the user intentionally exposes outside SFE3, such as the operating system's own filename, filesystem location or sharing context
+
+A browser-based application also cannot protect a device from malware that can inspect process memory, hook browser APIs, read the screen, capture keystrokes or control the operating system.
+
+
+24. WHY KDF PARAMETERS ARE PUBLIC
+==================================
+
+A common misunderstanding is that exposing "Argon2id, 64 MiB, 3 passes, 4 lanes" weakens the password security.
+
+Those values are parameters, not secrets. The security of the password KDF comes from forcing an attacker to perform the same expensive work when testing password guesses.
+
+SFE3 therefore stores the parameters in the public header so the legitimate decryptor knows exactly how to reproduce the key derivation.
+
+Authentication ensures that an attacker cannot lower those parameters without causing decryption failure.
+
+
+25. WHY THE RANDOM SALT AND NONCE ARE PUBLIC
+=============================================
+
+The salt and nonce are designed to be unique, not secret.
+
+The salt ensures independent KDF domains between containers even when users reuse a password.
+
+The nonce ensures AES-GCM receives a fresh nonce sequence for every container/key.
+
+Keeping them in the header makes the encrypted file self-contained and decryptable later.
+
+
+26. SECURITY LIMITATIONS AND HONEST BOUNDARIES
+===============================================
+
+SFE3 substantially improves privacy over the previous file layout, but several limitations remain.
+
+1. Total size remains observable.
+
+Fixed-size padding reduces exact-size leakage, but the number of 1 MiB records is still visible and therefore the total plaintext size is approximately inferable.
+
+2. The browser sees the input filename during processing.
+
+SFE3 stops unnecessarily persisting it into the encrypted artifact; it cannot stop the browser from knowing what the user selected.
+
+3. Memory clearing is best effort.
+
+JavaScript strings, browser internals and garbage collection are not directly controllable.
+
+4. Argon2id in pure JavaScript is slower than native Argon2.
+
+The project intentionally keeps the runtime self-contained and offline-capable. Users should select a memory value their device can actually handle.
+
+5. No independent audit has been performed.
+
+The verification suite demonstrates correctness against known vectors and round-trip properties but cannot replace expert review.
+
+6. Legacy formats remain legacy formats.
+
+SFE1 and SFE2 decryption exists for migration only. New files use SFE3.
+
+7. No password recovery exists.
+
+Anyone who loses the password can lose access to the plaintext.
+
+
+27. RECOMMENDED USER PRACTICE
+=============================
+
+Use a long, unique password. A generated 32-character password is a strong practical default when it can be stored safely.
+
+Use Argon2id for new files unless a specific compatibility reason requires PBKDF2.
+
+For a phone, start with a moderate Argon2id memory setting and increase it only if the device remains responsive.
+
+Keep more than one independent backup of important encrypted SFE3 containers.
+
+Do not assume that encryption protects an unlocked browser session or an infected device.
+
+When migrating a legacy SFE1/SFE2 file, decrypt it and immediately re-encrypt the plaintext into SFE3 so the new container receives the new metadata protections.
+
+
+28. RELEASE CLEANUP
+====================
+
+The supplied 2.1 package contained several standalone `.txt` release/build notes. They were removed from the final portable build to avoid shipping stale or contradictory release documentation.
+
+The security build keeps one authoritative long-form technical text document:
+
+    SFE3-SECURITY-IMPLEMENTATION-AND-AUDIT.txt
+
+README.md remains as the short user/developer overview.
+
+THIRD-PARTY-NOTICES.md remains because it is useful package documentation and is not a stale build note.
+
+No external CDN, server, package manager or runtime cryptography dependency was added.
+
+
+29. FINAL SECURITY SUMMARY
+==========================
+
+SFE3 is a genuinely different security boundary from the old plaintext-ZIP multi-file structure.
+
+New encryption now looks conceptually like:
+
+    user password
+          |
+          v
+    NFC normalization + password policy
+          |
+          v
+    Argon2id or PBKDF2-HMAC-SHA-256
+          |
+          v
+    32-byte AES key
+          |
+          v
+    AES-256-GCM
+          |
+          +--> authenticated public header
+          |
+          +--> encrypted fixed-size manifest
+          |
+          +--> encrypted fixed-size file-data records
+          |
+          v
+    opaque random .sfe3 filename
+
+This means the new encrypted file no longer needs to expose the original filename, folder hierarchy or plaintext ZIP entry directory. The encrypted manifest is authenticated. The data records are fixed-size and padded. KDF parameters and the header are authenticated. The nonce sequence is deterministic from a fresh random nonce base and record index. Both supported KDF paths have been tested.
+
+The result should be viewed as SFE's 3.0 security-focused container format, not as an independently audited cryptographic product.
+
+END OF SFE3 SECURITY IMPLEMENTATION AND RELEASE VERIFICATION DOCUMENT
