@@ -1,9 +1,0 @@
-Simple File Encrypter 2.0 — Final Build
-
-Preserves the supplied step-based v2.0 UI/UX and About documentation.
-Fixes:
-- Show Password / Hide Password keeps the exact same styled input UI.
-- About page uses the same navbar structure and positioning as the Home page.
-
-Encryption/decryption and crypto implementation files are unchanged from the
-supplied smooth v2.0 build.
